@@ -96,6 +96,8 @@ def main() -> None:
                 tts_client=tts_client,
                 recorder=recorder,
                 memory=memory,
+                gpio_chip=voice_cfg.get("gpio_chip", 0),
+                gpio_line=voice_cfg.get("gpio_line", 4),
             )
             import asyncio
             asyncio.run(voice_chat.run(system_prompt=system_prompt))
