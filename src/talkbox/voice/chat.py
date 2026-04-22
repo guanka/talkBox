@@ -39,8 +39,8 @@ class VoiceChat:
         try:
             while True:
                 try:
-                    print("\n说话中... (录音5秒)")
-                    audio_path = self.recorder.record(duration=5.0)
+                    print("\n按住空格键说话，松开结束...")
+                    audio_path = self.recorder.record_ptt(key=" ")
 
                     print("识别中...")
                     text = await self.asr.recognize(audio_path)

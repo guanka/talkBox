@@ -1,5 +1,10 @@
 import logging
+import select
+import sys
 import tempfile
+import termios
+import time
+import tty
 import wave
 from pathlib import Path
 
@@ -76,6 +81,60 @@ class AudioRecorder:
                 else:
                     silent_count = 0
         finally:
+            stream.stop_stream()
+            stream.close()
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        tmp.close()
+        self._save_wav(tmp.name, frames)
+        return tmp.name
+
+    def record_ptt(self, key: str = " ", max_duration: float = 30.0) -> str:
+        stream = self._audio.open(
+            format=pyaudio.paInt16,
+            channels=self.channels,
+            rate=self.sample_rate,
+            input=True,
+            frames_per_buffer=self.chunk,
+        )
+        frames = []
+        max_chunks = int(self.sample_rate / self.chunk * max_duration)
+
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+
+        try:
+            tty.setraw(fd)
+            key_display = key if key != " " else "空格"
+            sys.stdout.write(f"\r按住 {key_display} 键说话，松开结束...\r\n")
+            sys.stdout.flush()
+
+            while True:
+                if select.select([sys.stdin], [], [], 0.05)[0]:
+                    ch = sys.stdin.read(1)
+                    if ch == key or (key == " " and ch == " "):
+                        break
+                    if ch == "\x03":
+                        raise KeyboardInterrupt
+
+            sys.stdout.write("\r录音中...\r\n")
+            sys.stdout.flush()
+
+            last_key_time = time.time()
+            while len(frames) < max_chunks:
+                frames.append(stream.read(self.chunk, exception_on_overflow=False))
+
+                if select.select([sys.stdin], [], [], 0.001)[0]:
+                    ch = sys.stdin.read(1)
+                    if ch == key or (key == " " and ch == " "):
+                        last_key_time = time.time()
+                    if ch == "\x03":
+                        raise KeyboardInterrupt
+
+                if time.time() - last_key_time > 0.3:
+                    break
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             stream.stop_stream()
             stream.close()
 
