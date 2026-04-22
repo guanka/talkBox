@@ -4,6 +4,7 @@ __pycache__/
 dist/
 build/
 .palace/
+memory/
 .env
 config.yaml
 *.wav
