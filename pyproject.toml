@@ -1,0 +1,45 @@
+[project]
+name = "talkbox"
+version = "0.1.0"
+description = "TalkBox - 流式LLM聊天盒 + 语音对话"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pyyaml>=6.0",
+    "requests>=2.28.0",
+    "prompt-toolkit>=3.0.0",
+    "websockets>=12.0",
+    "mempalace>=3.2.0",
+]
+
+[project.optional-dependencies]
+voice = [
+    "numpy>=1.24.0",
+    "sounddevice>=0.4.0",
+    "pyaudio>=0.2.13",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "ruff>=0.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatchling.build.targets.wheel]
+packages = ["src/talkbox"]
+
+[tool.hatchling.build.targets.sdist]
+include = ["src/talkbox", "config.yaml"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[project.scripts]
+talkbox = "talkbox.__main__:main"

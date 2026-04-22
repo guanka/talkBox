@@ -1,0 +1,21 @@
+# TalkBox 配置文件
+
+llm:
+  provider: minimax          # glm | minimax
+  model: MiniMax-Text-01     # glm-4 | MiniMax-Text-01 等
+  api_key: "YOUR_API_KEY_HERE"
+  base_url: null             # 留空则按 provider 自动选择
+  system_prompt: "你是一个有用的AI助手。"
+
+voice:
+  asr_ws_url: "ws://100.64.0.2:8765/ws"
+  tts_ws_url: "ws://100.64.0.2:8765/ws/tts"
+  sample_rate: 16000
+
+memory:
+  enabled: false
+  palace_path: null
+  wing: "talkbox"
+
+logging:
+  level: INFO

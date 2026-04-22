@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.palace/
+.env
+config.yaml
+*.wav
+*.mp3
