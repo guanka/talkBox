@@ -1,12 +1,8 @@
 import logging
-import select
-import sys
+import subprocess
 import tempfile
-import termios
 import time
-import tty
 import wave
-from pathlib import Path
 
 import pyaudio
 
@@ -89,7 +85,25 @@ class AudioRecorder:
         self._save_wav(tmp.name, frames)
         return tmp.name
 
-    def record_ptt(self, key: str = " ", max_duration: float = 30.0) -> str:
+    def _gpio_active(self, chip: int, line: int, active_low: bool) -> bool:
+        try:
+            r = subprocess.run(
+                ["gpioget", "-c", str(chip), str(line)],
+                capture_output=True, text=True, timeout=1,
+            )
+            value = r.stdout.strip()
+            return (value == "0") if active_low else (value == "1")
+        except Exception as e:
+            logger.warning(f"GPIO 读取失败: {e}")
+            return False
+
+    def record_gpio(
+        self,
+        gpio_chip: int = 0,
+        gpio_line: int = 4,
+        active_low: bool = True,
+        max_duration: float = 30.0,
+    ) -> str:
         stream = self._audio.open(
             format=pyaudio.paInt16,
             channels=self.channels,
@@ -100,41 +114,19 @@ class AudioRecorder:
         frames = []
         max_chunks = int(self.sample_rate / self.chunk * max_duration)
 
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
+        print(f"按住 GPIO{gpio_line} 按钮说话，松开结束...")
+        logger.info(f"等待 GPIO{gpio_line} 触发 (chip={gpio_chip}, active_low={active_low})")
 
         try:
-            tty.setraw(fd)
-            key_display = key if key != " " else "空格"
-            sys.stdout.write(f"\r按住 {key_display} 键说话，松开结束...\r\n")
-            sys.stdout.flush()
+            while not self._gpio_active(gpio_chip, gpio_line, active_low):
+                time.sleep(0.05)
 
-            while True:
-                if select.select([sys.stdin], [], [], 0.05)[0]:
-                    ch = sys.stdin.read(1)
-                    if ch == key or (key == " " and ch == " "):
-                        break
-                    if ch == "\x03":
-                        raise KeyboardInterrupt
-
-            sys.stdout.write("\r录音中...\r\n")
-            sys.stdout.flush()
-
-            last_key_time = time.time()
+            print("录音中... (松开停止)")
             while len(frames) < max_chunks:
                 frames.append(stream.read(self.chunk, exception_on_overflow=False))
-
-                if select.select([sys.stdin], [], [], 0.001)[0]:
-                    ch = sys.stdin.read(1)
-                    if ch == key or (key == " " and ch == " "):
-                        last_key_time = time.time()
-                    if ch == "\x03":
-                        raise KeyboardInterrupt
-
-                if time.time() - last_key_time > 0.3:
+                if not self._gpio_active(gpio_chip, gpio_line, active_low):
                     break
         finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             stream.stop_stream()
             stream.close()
 
