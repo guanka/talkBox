@@ -1,20 +1,38 @@
 import logging
-import subprocess
 import tempfile
 import time
 import wave
 
 import pyaudio
 
+try:
+    import RPi.GPIO as GPIO
+    _HAS_GPIO = True
+except ImportError:
+    _HAS_GPIO = False
+
 logger = logging.getLogger("talkbox.voice.recorder")
 
 
 class AudioRecorder:
-    def __init__(self, sample_rate: int = 48000, channels: int = 1, chunk: int = 1024):
+    def __init__(self, sample_rate: int = 48000, channels: int = 1, chunk: int = 1024, gpio_pin: int = 4):
         self.sample_rate = sample_rate
         self.channels = channels
         self.chunk = chunk
+        self.gpio_pin = gpio_pin
         self._audio = pyaudio.PyAudio()
+        self._gpio_initialized = False
+
+    def _init_gpio(self) -> None:
+        if not _HAS_GPIO or self._gpio_initialized:
+            return
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(self.gpio_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        self._gpio_initialized = True
+        logger.info(f"GPIO{self.gpio_pin} 已初始化 (BCM, PULL_UP)")
+
+    def _gpio_pressed(self) -> bool:
+        return GPIO.input(self.gpio_pin) == GPIO.LOW
 
     def record(self, duration: float) -> str:
         stream = self._audio.open(
@@ -85,25 +103,14 @@ class AudioRecorder:
         self._save_wav(tmp.name, frames)
         return tmp.name
 
-    def _gpio_active(self, chip: int, line: int, active_low: bool) -> bool:
-        try:
-            r = subprocess.run(
-                ["gpioget", "-c", str(chip), str(line)],
-                capture_output=True, text=True, timeout=1,
-            )
-            value = r.stdout.strip()
-            return (value == "0") if active_low else (value == "1")
-        except Exception as e:
-            logger.warning(f"GPIO 读取失败: {e}")
-            return False
-
     def record_gpio(
         self,
-        gpio_chip: int = 0,
-        gpio_line: int = 4,
-        active_low: bool = True,
+        gpio_pin: int | None = None,
         max_duration: float = 30.0,
     ) -> str:
+        pin = gpio_pin or self.gpio_pin
+        self._init_gpio()
+
         stream = self._audio.open(
             format=pyaudio.paInt16,
             channels=self.channels,
@@ -114,17 +121,17 @@ class AudioRecorder:
         frames = []
         max_chunks = int(self.sample_rate / self.chunk * max_duration)
 
-        print(f"按住 GPIO{gpio_line} 按钮说话，松开结束...")
-        logger.info(f"等待 GPIO{gpio_line} 触发 (chip={gpio_chip}, active_low={active_low})")
+        print(f"按住 GPIO{pin} 按钮说话，松开结束...")
+        logger.info(f"等待 GPIO{pin} 触发 (PULL_UP, LOW=按下)")
 
         try:
-            while not self._gpio_active(gpio_chip, gpio_line, active_low):
+            while not self._gpio_pressed():
                 time.sleep(0.05)
 
             print("录音中... (松开停止)")
             while len(frames) < max_chunks:
                 frames.append(stream.read(self.chunk, exception_on_overflow=False))
-                if not self._gpio_active(gpio_chip, gpio_line, active_low):
+                if not self._gpio_pressed():
                     break
         finally:
             stream.stop_stream()
@@ -145,3 +152,6 @@ class AudioRecorder:
 
     def cleanup(self) -> None:
         self._audio.terminate()
+        if self._gpio_initialized:
+            GPIO.cleanup()
+            self._gpio_initialized = False

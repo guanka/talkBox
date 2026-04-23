@@ -11,8 +11,7 @@ voice:
   asr_ws_url: "ws://100.64.0.2:8765/ws"
   tts_ws_url: "ws://100.64.0.2:8765/ws/tts"
   sample_rate: 48000
-  gpio_chip: 0              # 树莓派 GPIO chip
-  gpio_line: 4              # GPIO 引脚号
+  gpio_pin: 4                 # BCM 编码的 GPIO 引脚号
 
 memory:
   enabled: false

@@ -24,16 +24,12 @@ class VoiceChat:
         tts_client: TTSClient,
         recorder: AudioRecorder,
         memory: Memory | None = None,
-        gpio_chip: int = 0,
-        gpio_line: int = 4,
     ):
         self.llm = llm_client
         self.asr = asr_client
         self.tts = tts_client
         self.recorder = recorder
         self.memory = memory
-        self.gpio_chip = gpio_chip
-        self.gpio_line = gpio_line
         self.conversation_history: list[Message] = []
 
     async def run(self, system_prompt: str = "你是一个有用的AI助手。") -> None:
@@ -44,10 +40,7 @@ class VoiceChat:
             while True:
                 try:
                     print("\n按住 GPIO 按钮说话，松开结束...")
-                    audio_path = self.recorder.record_gpio(
-                        gpio_chip=self.gpio_chip,
-                        gpio_line=self.gpio_line,
-                    )
+                    audio_path = self.recorder.record_gpio()
 
                     print("识别中...")
                     text = await self.asr.recognize(audio_path)
