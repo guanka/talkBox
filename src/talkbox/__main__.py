@@ -88,7 +88,7 @@ def main() -> None:
             voice_cfg = config.get("voice", {})
             asr_client = ASRClient(ws_url=voice_cfg.get("asr_ws_url", "ws://100.64.0.2:8765/ws"))
             tts_client = TTSClient(ws_url=voice_cfg.get("tts_ws_url", "ws://100.64.0.2:8765/ws/tts"))
-            recorder = AudioRecorder(sample_rate=voice_cfg.get("sample_rate", 16000))
+            recorder = AudioRecorder(sample_rate=voice_cfg.get("sample_rate", 48000))
 
             voice_chat = VoiceChat(
                 llm_client=llm_client,

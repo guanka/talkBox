@@ -10,7 +10,7 @@ logger = logging.getLogger("talkbox.voice.recorder")
 
 
 class AudioRecorder:
-    def __init__(self, sample_rate: int = 16000, channels: int = 1, chunk: int = 1024):
+    def __init__(self, sample_rate: int = 48000, channels: int = 1, chunk: int = 1024):
         self.sample_rate = sample_rate
         self.channels = channels
         self.chunk = chunk
