@@ -32,7 +32,7 @@ class AudioRecorder:
         logger.info(f"GPIO{self.gpio_pin} 已初始化 (BCM, PULL_UP)")
 
     def _gpio_pressed(self) -> bool:
-        return GPIO.input(self.gpio_pin) == GPIO.LOW
+        return GPIO.input(self.gpio_pin) != GPIO.LOW
 
     def record(self, duration: float) -> str:
         stream = self._audio.open(

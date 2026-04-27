@@ -85,6 +85,7 @@ class StreamingLLMClient:
         response = self.session.post(url, json=payload, stream=True)
         response.raise_for_status()
 
+        in_thinking = False
         for line in response.iter_lines(decode_unicode=True):
             if not line or not line.startswith("data: "):
                 continue
@@ -95,6 +96,21 @@ class StreamingLLMClient:
                 chunk = json.loads(data_str)
                 delta = chunk["choices"][0].get("delta", {})
                 content = delta.get("content", "")
+                if not content:
+                    continue
+                # 过滤 <think ...>...</think > 块（MiniMax 推理模型）
+                if in_thinking:
+                    if "</think" in content:
+                        in_thinking = False
+                        content = content.split(">", 1)[-1] if ">" in content else ""
+                    else:
+                        continue
+                if "<think" in content:
+                    in_thinking = True
+                    before = content.split("<think", 1)[0]
+                    if before.strip():
+                        yield before
+                    continue
                 if content:
                     yield content
             except (json.JSONDecodeError, KeyError, IndexError):
