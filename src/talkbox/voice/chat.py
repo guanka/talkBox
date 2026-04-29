@@ -16,25 +16,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("talkbox.voice.chat")
 
-_SENTENCE_ENDINGS = re.compile(r"([。！？；\n.!?;]+)")
-
-
-def _split_sentences(text: str) -> list[str]:
-    if not text.strip():
-        return []
-    parts = _SENTENCE_ENDINGS.split(text)
-    sentences = []
-    current = ""
-    for part in parts:
-        current += part
-        if _SENTENCE_ENDINGS.fullmatch(part):
-            stripped = current.strip()
-            if stripped:
-                sentences.append(stripped)
-            current = ""
-    if current.strip():
-        sentences.append(current.strip())
-    return sentences
+_SENTENCE_ENDINGS = re.compile(r"[。！？；\n.!?;]+")
 
 
 class VoiceChat:
@@ -103,24 +85,17 @@ class VoiceChat:
             print(chunk, end="", flush=True)
             buffer += chunk
 
-            sentences = _split_sentences(buffer)
-            if len(sentences) > 1:
-                for sentence in sentences[:-1]:
-                    full_response += sentence
-                    tts_tasks.append(asyncio.create_task(
-                        self.tts.synthesize_and_play_streaming(sentence)
-                    ))
-                buffer = sentences[-1] if not _SENTENCE_ENDINGS.search(buffer) else buffer
-                if _SENTENCE_ENDINGS.search(buffer):
-                    full_response += buffer
-                    tts_tasks.append(asyncio.create_task(
-                        self.tts.synthesize_and_play_streaming(buffer)
-                    ))
-                    buffer = ""
+            while _SENTENCE_ENDINGS.search(buffer):
+                match = _SENTENCE_ENDINGS.search(buffer)
+                sentence = buffer[:match.end()]
+                buffer = buffer[match.end():]
+                full_response += sentence
+                tts_tasks.append(asyncio.create_task(
+                    self.tts.synthesize_and_play_streaming(sentence)
+                ))
 
         if buffer.strip():
             full_response += buffer
-            print(buffer, end="", flush=True)
             tts_tasks.append(asyncio.create_task(
                 self.tts.synthesize_and_play_streaming(buffer)
             ))
