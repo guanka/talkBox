@@ -1,8 +1,9 @@
+import asyncio
 import json
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any, AsyncIterator, Iterator
 
 import requests
 
@@ -115,6 +116,31 @@ class StreamingLLMClient:
                     yield content
             except (json.JSONDecodeError, KeyError, IndexError):
                 continue
+
+    async def chat_stream_async(self, messages: list[Message]) -> AsyncIterator[str]:
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+        def _producer():
+            try:
+                for chunk in self.chat_stream(messages):
+                    queue.put_nowait(chunk)
+            except Exception as e:
+                queue.put_nowait(None)
+                raise
+            finally:
+                queue.put_nowait(None)
+
+        loop = asyncio.get_event_loop()
+        future = loop.run_in_executor(None, _producer)
+
+        try:
+            while True:
+                chunk = await queue.get()
+                if chunk is None:
+                    break
+                yield chunk
+        finally:
+            future.cancel()
 
     def _serialize(self, m: Message) -> dict[str, Any]:
         return {"role": m.role, "content": m.content}

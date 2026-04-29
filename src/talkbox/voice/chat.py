@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,6 +15,26 @@ if TYPE_CHECKING:
     from talkbox.memory import Memory
 
 logger = logging.getLogger("talkbox.voice.chat")
+
+_SENTENCE_ENDINGS = re.compile(r"([。！？；\n.!?;]+)")
+
+
+def _split_sentences(text: str) -> list[str]:
+    if not text.strip():
+        return []
+    parts = _SENTENCE_ENDINGS.split(text)
+    sentences = []
+    current = ""
+    for part in parts:
+        current += part
+        if _SENTENCE_ENDINGS.fullmatch(part):
+            stripped = current.strip()
+            if stripped:
+                sentences.append(stripped)
+            current = ""
+    if current.strip():
+        sentences.append(current.strip())
+    return sentences
 
 
 class VoiceChat:
@@ -56,20 +77,13 @@ class VoiceChat:
                     messages = self._build_messages(system_prompt, text)
 
                     print("[TalkBox] ", end="", flush=True)
-                    full_response = ""
-                    for chunk in self.llm.chat_stream(messages):
-                        print(chunk, end="", flush=True)
-                        full_response += chunk
+                    full_response = await self._stream_llm_to_tts(messages)
                     print()
 
                     self.conversation_history.append(Message(role="assistant", content=full_response))
 
                     if self.memory:
                         self.memory.store(text, full_response)
-
-                    if full_response.strip():
-                        print("播放中...")
-                        await self.tts.synthesize_and_play(full_response)
 
                 except KeyboardInterrupt:
                     print("\n再见!")
@@ -79,6 +93,42 @@ class VoiceChat:
                     print(f"\n错误: {e}")
         finally:
             self.recorder.cleanup()
+
+    async def _stream_llm_to_tts(self, messages: list[Message]) -> str:
+        buffer = ""
+        full_response = ""
+        tts_tasks: list[asyncio.Task] = []
+
+        async for chunk in self.llm.chat_stream_async(messages):
+            print(chunk, end="", flush=True)
+            buffer += chunk
+
+            sentences = _split_sentences(buffer)
+            if len(sentences) > 1:
+                for sentence in sentences[:-1]:
+                    full_response += sentence
+                    tts_tasks.append(asyncio.create_task(
+                        self.tts.synthesize_and_play_streaming(sentence)
+                    ))
+                buffer = sentences[-1] if not _SENTENCE_ENDINGS.search(buffer) else buffer
+                if _SENTENCE_ENDINGS.search(buffer):
+                    full_response += buffer
+                    tts_tasks.append(asyncio.create_task(
+                        self.tts.synthesize_and_play_streaming(buffer)
+                    ))
+                    buffer = ""
+
+        if buffer.strip():
+            full_response += buffer
+            print(buffer, end="", flush=True)
+            tts_tasks.append(asyncio.create_task(
+                self.tts.synthesize_and_play_streaming(buffer)
+            ))
+
+        if tts_tasks:
+            await asyncio.gather(*tts_tasks, return_exceptions=True)
+
+        return full_response
 
     def _build_messages(self, system_prompt: str, current_message: str) -> list[Message]:
         memory_context = ""
